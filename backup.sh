@@ -18,18 +18,20 @@ tg() {
 # حالة آخر نسخ (لتجاوز اللي ما تغيّر)
 rclone copyto "$REMOTE/state.json" "$STATE" 2>/dev/null || echo '{}' > "$STATE"
 
+echo "Remote: $REMOTE"; rclone lsf "$REMOTE" 2>&1 | head -20
 repos=$(gh repo list "$OWNER" --limit 1000 --json name,pushedAt -q '.[] | "\(.name) \(.pushedAt)"')
 
 while read -r name pushed; do
   [ -n "$name" ] || continue
   full="$OWNER/$name"
+  echo "::group::$name"
   prev=$(jq -r --arg r "$name" '.[$r] // {}' "$STATE")
   changed=0
 
   # 1) الكود كامل مع كل التاريخ (ملف bundle واحد)
   if [ "$(jq -r '.pushed // ""' <<<"$prev")" != "$pushed" ]; then
     dir="$WORK/$name.git"
-    if git clone -q --mirror "https://x-access-token:${GH_TOKEN}@github.com/${full}.git" "$dir" \
+    if git clone --mirror "https://x-access-token:${GH_TOKEN}@github.com/${full}.git" "$dir" \
        && { git -C "$dir" bundle create "$WORK/$name.bundle" --all 2>/dev/null || true; } \
        && { [ ! -f "$WORK/$name.bundle" ] || rclone copyto "$WORK/$name.bundle" "$REMOTE/repos/$name.bundle"; }; then
       prev=$(jq --arg p "$pushed" '.pushed=$p' <<<"$prev"); changed=1
@@ -64,9 +66,12 @@ while read -r name pushed; do
   jq --arg r "$name" --argjson v "$prev" '.[$r]=$v' "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
   [ "$changed" = 1 ] && done_list+=("$name")
   rm -rf "$WORK/rel" "$WORK/art"
+  echo "changed=$changed"; echo "::endgroup::"
 done <<<"$repos"
 
 rclone copyto "$STATE" "$REMOTE/state.json"
+echo "=== Drive content ==="; rclone lsf -R --max-depth 2 "$REMOTE" 2>&1 | head -60
+echo "done=${#done_list[@]} fail=${#fail_list[@]} (${fail_list[*]:-})"
 
 # إشعار تيلجرام (فقط إذا صار شي)
 if [ ${#done_list[@]} -gt 0 ] || [ ${#fail_list[@]} -gt 0 ]; then
