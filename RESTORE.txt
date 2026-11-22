@@ -1,0 +1,30 @@
+طريقة استرجاع أي مستودع إلى مستودع جديد
+=========================================
+
+محتويات المجلد:
+  code/<اسم>.zip      آخر نسخة من المشروع كاملة (مع مجلد .github والأوامر)
+  repos/<اسم>.bundle  المستودع كامل مع كل التاريخ والفروع
+  apks/               ملفات التطبيقات
+  secure/             المفاتيح (مشفّرة - تُفتح بـ rclone وكلمة سر secure)
+
+الطريقة 1 (الأسهل - من ملف zip):
+  1) نزّل code/<اسم>.zip وفك الضغط
+  2) افتح المجلد بـ PowerShell ونفّذ:
+       git init -b main
+       git add -A
+       git commit -m "restore"
+       git remote add origin https://github.com/Hussein199800/<المستودع-الجديد>.git
+       git push -u origin main
+  (لا ترفع بالسحب والإفلات من موقع GitHub: بينسى مجلد .github اللي فيه الأوامر)
+
+الطريقة 2 (مع كل التاريخ - من ملف bundle):
+  git clone <اسم>.bundle <اسم>
+  cd <اسم>
+  git remote set-url origin https://github.com/Hussein199800/<المستودع-الجديد>.git
+  git push -u origin --all
+  git push origin --tags
+
+بعد الرفع (مرة وحدة):
+  - الموقع: Settings > Pages > اختر نفس المصدر (فرع main أو GitHub Actions)
+  - التطبيقات: Settings > Secrets > Actions > أعد إضافة الأسرار
+    (قيمها محفوظة مشفّرة في secure/ - استرجعها بـ: rclone copy secure: C:\Restore)

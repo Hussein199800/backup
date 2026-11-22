@@ -29,7 +29,7 @@ while read -r name pushed; do
   changed=0
 
   # 1) الكود كامل مع كل التاريخ (ملف bundle واحد)
-  if [ "$(jq -r '.pushed // ""' <<<"$prev")" != "$pushed" ]; then
+  if [ "$(jq -r '.pushed // ""' <<<"$prev")" != "$pushed" ] || [ "$(jq -r '.zipped // ""' <<<"$prev")" != "$pushed" ]; then
     dir="$WORK/$name.git"
     if git clone --mirror "https://x-access-token:${GH_TOKEN}@github.com/${full}.git" "$dir" \
        && { git -C "$dir" bundle create "$WORK/$name.bundle" --all 2>/dev/null || true; } \
@@ -38,7 +38,14 @@ while read -r name pushed; do
     else
       fail_list+=("$name"); continue
     fi
-    rm -rf "$dir" "$WORK/$name.bundle"
+    # نسخة zip جاهزة للرفع على مستودع جديد (آخر نسخة مع .github وكل الملفات)
+    if git -C "$dir" archive --format=zip -o "$WORK/$name.zip" HEAD 2>/dev/null; then
+      rclone copyto "$WORK/$name.zip" "$REMOTE/code/$name.zip" \
+        && prev=$(jq --arg p "$pushed" '.zipped=$p' <<<"$prev")
+    else
+      prev=$(jq --arg p "$pushed" '.zipped=$p' <<<"$prev")   # مستودع فاضي
+    fi
+    rm -rf "$dir" "$WORK/$name.bundle" "$WORK/$name.zip"
   fi
 
   # 2) APK من آخر 5 إصدارات (Releases)
@@ -70,6 +77,7 @@ while read -r name pushed; do
 done <<<"$repos"
 
 rclone copyto "$STATE" "$REMOTE/state.json"
+rclone copyto RESTORE.txt "$REMOTE/اقرأني-طريقة-الاسترجاع.txt"
 echo "=== Drive content ==="; rclone lsf -R --max-depth 2 "$REMOTE" 2>&1 | head -60
 echo "done=${#done_list[@]} fail=${#fail_list[@]} (${fail_list[*]:-})"
 
